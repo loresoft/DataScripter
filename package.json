@@ -1,0 +1,66 @@
+{
+  "name": "data-scripter",
+  "displayName": "Data Scripter",
+  "description": "Generate merge script for data in table",
+  "version": "1.0.0",
+  "publisher": "LoreSoft",
+  "repository": "https://github.com/LoreSoft/DataScripter.git",
+  "license": "MIT",
+  "engines": {
+    "azdata": "*",
+    "vscode": "^1.39.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "Script",
+    "Insert",
+    "Merge",
+    "SQL"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:data-scripter.generateMergeScript"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "data-scripter.generateMergeScript",
+        "title": "Script Data as Merge"
+      }
+    ],
+    "menus": {
+      "objectExplorer/item/context": [
+        {
+          "command": "data-scripter.generateMergeScript",
+          "when": "connectionProvider == MSSQL && nodeType == Table || nodeType == View",
+          "group": "NONE"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "lint": "eslint src --ext ts",
+    "proposedapi": "node installTypings.js",
+    "pretest": "npm run compile && npm run lint",
+    "test": "node ./out/test/runTest.js",
+    "vscode:prepublish": "npm run compile",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/azdata": "*",
+    "@types/glob": "^7.1.4",
+    "@types/mocha": "^9.0.0",
+    "@types/node": "^13.11.0",
+    "@types/vscode": "^1.39.0",
+    "@typescript-eslint/eslint-plugin": "^2.30.0",
+    "@typescript-eslint/parser": "^2.30.0",
+    "azdata-test": "^1.x",
+    "eslint": "^6.8.0",
+    "glob": "^7.1.7",
+    "mocha": "^9.1.0",
+    "typescript": "^4.3.5"
+  }
+}
