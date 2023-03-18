@@ -50,6 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 async function scriptData(backgroundOperation: azdata.BackgroundOperation, args: GenerateOptions) {
   const connectionProfile = args.context.connectionProfile as azdata.IConnectionProfile;
+  const metadata = args.context.nodeInfo!.metadata;
 
   try {
     const connectionResult: azdata.ConnectionResult = await azdata.connection.connect(connectionProfile, false, false);
@@ -73,7 +74,6 @@ async function scriptData(backgroundOperation: azdata.BackgroundOperation, args:
 
     const connectionProvider = azdata.dataprotocol.getProvider<azdata.ConnectionProvider>(providerId, azdata.DataProviderType.ConnectionProvider);
     const queryProvider = azdata.dataprotocol.getProvider<azdata.QueryProvider>(providerId, azdata.DataProviderType.QueryProvider);
-    const metadataProvider = azdata.dataprotocol.getProvider<azdata.MetadataProvider>(providerId, azdata.DataProviderType.MetadataProvider);
 
     backgroundOperation.updateStatus(azdata.TaskStatus.InProgress, "Getting records...");
 
@@ -85,15 +85,19 @@ async function scriptData(backgroundOperation: azdata.BackgroundOperation, args:
       return;
     }
 
-    /*
-  var columns = await metadataProvider.getTableInfo(
-    connectionUri,
-    args.context.nodeInfo?.metadata as azdata.ObjectMetadata
-  );
+    // look up primary keys
+    var primaryKeySql = `SELECT ky.COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS ky
+LEFT OUTER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS tc
+  ON tc.CONSTRAINT_CATALOG = ky.CONSTRAINT_CATALOG AND tc.CONSTRAINT_SCHEMA = ky.CONSTRAINT_SCHEMA
+    AND tc.CONSTRAINT_NAME = ky.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+WHERE ky.TABLE_CATALOG = '${databaseName}' AND ky.TABLE_SCHEMA = '${metadata!.schema}' AND ky.TABLE_NAME = '${metadata!.name}'`;
 
-  var metadata = await metadataProvider.getMetadata(connectionUri);
-  var databases = await metadataProvider.getDatabases(connectionUri);
-  */
+    var primaryKeyResults = await queryProvider.runQueryAndReturn(connectionUri, primaryKeySql);
+    if (!primaryKeyResults || primaryKeyResults.rowCount === 0) {
+      backgroundOperation.updateStatus(azdata.TaskStatus.Canceling, "Could not retrieve column data");
+      vscode.window.showErrorMessage("Failed to retrieve column data");
+      return;
+    }
 
     var results = await queryProvider.runQueryAndReturn(connectionUri, args.selectQuery);
     if (!results || results.rowCount === 0) {
@@ -102,8 +106,7 @@ async function scriptData(backgroundOperation: azdata.BackgroundOperation, args:
       return;
     }
 
-    const metadata = args.context.nodeInfo!.metadata;
-    const sqlGenerator: SqlGenerator = new SqlGenerator(results, metadata!.schema, metadata!.name);
+    const sqlGenerator: SqlGenerator = new SqlGenerator(results, primaryKeyResults, metadata!.schema, metadata!.name);
 
     backgroundOperation.updateStatus(azdata.TaskStatus.InProgress, "Reading data...");
     const sqlScript = sqlGenerator.GenerateMerge();

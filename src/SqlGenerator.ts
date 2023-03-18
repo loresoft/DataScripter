@@ -2,20 +2,22 @@ import * as azdata from "azdata";
 
 export class SqlGenerator {
   private _resultSet: azdata.SimpleExecuteResult;
+  private _primaryKeySet: azdata.SimpleExecuteResult;
   private _tableName: string;
   private _schemaName: string;
 
-  constructor(resultSet: azdata.SimpleExecuteResult, schemaName: string, tableName: string) {
+  constructor(resultSet: azdata.SimpleExecuteResult, primaryKeySet: azdata.SimpleExecuteResult, schemaName: string, tableName: string) {
     this._schemaName = schemaName;
     this._tableName = tableName;
     this._resultSet = resultSet;
+    this._primaryKeySet = primaryKeySet;
   }
 
   public GenerateMerge(): string {
     let scripted: string[] = [];
     const hasIdentity = this.hasIdentityColumn();
 
-    scripted.push(`/* Table ${this._tableName} data */\n`);
+    scripted.push(`/* Table ${this._schemaName}.${this._tableName} data */\n`);
 
     if (hasIdentity) {
       scripted.push(`\nSET IDENTITY_INSERT [${this._schemaName}].[${this._tableName}] ON;\n\n`);
@@ -47,7 +49,7 @@ export class SqlGenerator {
     scripted.push(`WHEN MATCHED THEN `);
     scripted.push(`    UPDATE SET`);
     this.writeUpdate(scripted, 8);
-    scripted.push(`OUTPUT $action as MergeAction;`);
+    scripted.push(`OUTPUT $action as [Action];`);
 
     if (hasIdentity) {
       scripted.push(`\nSET IDENTITY_INSERT [${this._schemaName}].[${this._tableName}] OFF;`);
@@ -91,13 +93,8 @@ export class SqlGenerator {
   private writeJoin(scripted: string[], indention: number = 4) {
     let join: string[] = [];
 
-    for (const column of this._resultSet.columnInfo) {
-      if (!column.isKey) {
-        continue;
-      }
-
-      const columnName = column.columnName;
-
+    for (const row of this._primaryKeySet.rows) {
+      const columnName = row[0].displayValue;
       join.push(`t.[${columnName}] = s.[${columnName}]`);
     }
 
@@ -113,9 +110,13 @@ export class SqlGenerator {
       if (column.isKey || column.isAutoIncrement || column.isReadOnly) {
         continue;
       }
-
-      const indent = " ".repeat(indention);
       const columnName = column.columnName;
+
+      if (this._primaryKeySet.rows.find(p => p[0].displayValue === columnName)){
+        continue;
+      }
+      const indent = " ".repeat(indention);
+
 
       columns.push(`${indent}t.[${columnName}] = s.[${columnName}]`);
     }
