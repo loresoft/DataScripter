@@ -1,0 +1,24 @@
+name: Build Extension
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          
+      - run: npm install -g vsce
+      - run: npm install    
+      - run: vsce package
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Package
+          path: test.visx
+          
