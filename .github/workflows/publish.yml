@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Packages
         run: |
-          npm install -g vsce
+          npm install -g @vscode/vsce
           npm install
           npm version "${{env.BUILD_VERSION}}"
 
