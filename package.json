@@ -4,7 +4,10 @@
   "description": "Generate merge script for data in table",
   "version": "1.0.0",
   "publisher": "LoreSoft",
-  "repository": "https://github.com/LoreSoft/DataScripter.git",
+  "repository": {
+    "type": "github",
+    "url": "https://github.com/LoreSoft/DataScripter.git"
+  },
   "license": "MIT",
   "engines": {
     "azdata": "*",
