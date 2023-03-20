@@ -10,7 +10,7 @@ on:
       - main
       - develop
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches:
       - main
@@ -26,18 +26,22 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
+          always-auth: true
           node-version: 18
+          registry-url: "https://npm.pkg.github.com"
 
       - name: Install Packages
         run: |
           npm install -g @vscode/vsce
           npm install
-          npm version "${{env.BUILD_VERSION}}"
 
-      - name: Create Packages
+      - name: Version Package
+        run: npm version "${{env.BUILD_VERSION}}"
+
+      - name: Create Package
         run: vsce package
 
-      - name: Upload Packages
+      - name: Upload Package
         if: success() && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v3
         with:
