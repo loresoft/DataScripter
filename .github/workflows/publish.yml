@@ -30,6 +30,11 @@ jobs:
           node-version: 18
           registry-url: "https://npm.pkg.github.com"
 
+      - name: Configure
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
       - name: Install Packages
         run: |
           npm install -g @vscode/vsce
