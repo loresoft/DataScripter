@@ -5,27 +5,41 @@ env:
   BUILD_INFORMATION: "1.0.${{github.run_number}}+Branch.${{github.ref_name}}.Sha.${{github.sha}}"
 
 on:
-  release:
-    types: [created]
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - develop
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      - run: |
+      - name: Install Packages
+        run: |
           npm install -g vsce
           npm install
           npm version "${{env.BUILD_VERSION}}"
 
-      - run: vsce package
+      - name: Create Packages
+        run: vsce package
 
-      - uses: actions/upload-artifact@v3
+      - name: Upload Packages
+        if: success() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v3
         with:
           name: Package
           path: data-scripter-*.vsix
