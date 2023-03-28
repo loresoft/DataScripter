@@ -1,4 +1,4 @@
-# Azure Data Studio - Data Scripterer
+# Azure Data Studio - Data Scripter
 
 Azure Data Studio Extension for generating merge script for table data
 
