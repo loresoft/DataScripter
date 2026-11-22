@@ -10,7 +10,11 @@
     "url": "https://github.com/loresoft/DataScripter.git"
   },
   "license": "MIT",
-  "homepage": "https://github.com/loresoft/DataScripter#readme",
+  "pricing": "Free",
+  "sponsor": {
+    "url": "https://github.com/sponsors/loresoft"
+  },
+  "homepage": "https://github.com/loresoft/DataScripter",
   "bugs": {
     "url": "https://github.com/loresoft/DataScripter/issues"
   },
