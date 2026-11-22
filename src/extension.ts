@@ -1,134 +1,197 @@
-("use strict");
-
 import * as vscode from "vscode";
-import * as azdata from "azdata";
+import type { IDbColumn, ITreeNodeInfo, SimpleExecuteResult } from "vscode-mssql";
 
-import { SqlGenerator } from "./SqlGenerator";
+import { SqlConnection, TableColumn } from "./mssql";
+import { findTruncatedColumns, generateSelect, isScriptedColumn, quoteName, SqlGenerator } from "./generator";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("data-scripter.generateMergeScript", async (oeContext: azdata.ObjectExplorerContext) => {
-      if (!oeContext) {
-        vscode.window.showErrorMessage("This extension cannot be run from the command menu.");
-        return;
-      }
-
-      const metadata = oeContext.nodeInfo!.metadata;
-      const tableName: string = `[${metadata!.schema}].[${metadata!.name}]`;
-
-      const inputOptions: vscode.InputBoxOptions = {
-        prompt: `Press [Enter] to accept the default of all data or edit the SQL statement to select subsets of data.`,
-        value: `SELECT * FROM ${tableName};`,
-      };
-
-      const sql = await vscode.window.showInputBox(inputOptions);
-      if (!sql || sql.trim() === "") {
-        vscode.window.showInformationMessage("Query was cancelled");
-        return;
-      }
-
-      const generateOptions: GenerateOptions = {
-        context: oeContext,
-        tableName: tableName,
-        selectQuery: sql,
-      };
-
-      // run this as a background operation with status displaying in Tasks pane
-      const backgroundOperationInfo: azdata.BackgroundOperationInfo = {
-        connection: undefined,
-        displayName: `Scripting Data for : ${tableName} `,
-        description: "A data scripting operation",
-        isCancelable: true,
-        operation: (operation: azdata.BackgroundOperation) => {
-          return scriptData(operation, generateOptions);
-        },
-      };
-      azdata.tasks.startBackgroundOperation(backgroundOperationInfo);
-    })
+    vscode.commands.registerCommand("data-scripter.generateMergeScript", generateMergeScript)
   );
 }
 
-async function scriptData(backgroundOperation: azdata.BackgroundOperation, args: GenerateOptions) {
-  const connectionProfile = args.context.connectionProfile as azdata.IConnectionProfile;
-  const metadata = args.context.nodeInfo!.metadata;
+async function generateMergeScript(node?: ITreeNodeInfo): Promise<void> {
+  const metadata = node?.metadata;
+
+  if (!node || !metadata?.name) {
+    vscode.window.showErrorMessage("Right-click a table or view in the SQL Server Object Explorer to script its data.");
+    return;
+  }
+
+  const tableName = `${quoteName(metadata.schema)}.${quoteName(metadata.name)}`;
+  const title = `Script Data as Merge: ${tableName}`;
 
   try {
-    const connectionResult: azdata.ConnectionResult = await azdata.connection.connect(connectionProfile, false, false);
+    const tableColumns = await runQuery(node, `Reading columns of ${tableName}`, "Getting columns...", (connection) =>
+      connection.getColumns(metadata.schema, metadata.name)
+    );
 
-    if (!connectionResult.connected) {
-      backgroundOperation.updateStatus(azdata.TaskStatus.Failed, "Could not connect to database server");
-      vscode.window.showErrorMessage(`Error:${connectionResult?.errorMessage}`);
+    if (!tableColumns) {
       return;
     }
 
-    const connectionUri: string = await azdata.connection.getUriForConnection(connectionResult.connectionId as string);
+    const sql = await vscode.window.showInputBox({
+      title: title,
+      prompt: "Press [Enter] to accept the default of all data or edit the SQL statement to select subsets of data.",
+      value: generateSelect(metadata.schema, metadata.name, tableColumns, getSkipColumns()),
+      ignoreFocusOut: true,
+    });
 
-    const providerId = connectionProfile?.providerName;
-    const databaseName = connectionProfile?.databaseName;
-
-    if (!providerId || !databaseName) {
-      backgroundOperation.updateStatus(azdata.TaskStatus.Failed, "Could not connect to database server");
-      vscode.window.showErrorMessage("Could not connect to database server");
+    if (!sql || sql.trim() === "") {
+      vscode.window.showInformationMessage("Query was cancelled");
       return;
     }
 
-    const connectionProvider = azdata.dataprotocol.getProvider<azdata.ConnectionProvider>(providerId, azdata.DataProviderType.ConnectionProvider);
-    const queryProvider = azdata.dataprotocol.getProvider<azdata.QueryProvider>(providerId, azdata.DataProviderType.QueryProvider);
+    const results = await runQuery(node, `Scripting data for ${tableName}`, "Getting records...", (connection) =>
+      connection.query(sql)
+    );
 
-    backgroundOperation.updateStatus(azdata.TaskStatus.InProgress, "Getting records...");
-
-    const changeDatabaseResults = await connectionProvider.changeDatabase(connectionUri, databaseName);
-
-    if (!changeDatabaseResults) {
-      backgroundOperation.updateStatus(azdata.TaskStatus.Failed, `Could not switch to [${databaseName}] database`);
-      vscode.window.showErrorMessage(`Could not switch to [${databaseName}] database`);
+    if (!results) {
       return;
     }
 
-    // look up primary keys
-    var primaryKeySql = `SELECT ky.COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS ky
-LEFT OUTER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS tc
-  ON tc.CONSTRAINT_CATALOG = ky.CONSTRAINT_CATALOG AND tc.CONSTRAINT_SCHEMA = ky.CONSTRAINT_SCHEMA
-    AND tc.CONSTRAINT_NAME = ky.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-WHERE ky.TABLE_CATALOG = '${databaseName}' AND ky.TABLE_SCHEMA = '${metadata!.schema}' AND ky.TABLE_NAME = '${metadata!.name}'`;
-
-    var primaryKeyResults = await queryProvider.runQueryAndReturn(connectionUri, primaryKeySql);
-    if (!primaryKeyResults || primaryKeyResults.rowCount === 0) {
-      backgroundOperation.updateStatus(azdata.TaskStatus.Canceling, "Could not retrieve column data");
-      vscode.window.showErrorMessage("Failed to retrieve column data");
+    if (results.rowCount === 0) {
+      vscode.window.showInformationMessage("The query returned no rows to script.");
       return;
     }
 
-    var results = await queryProvider.runQueryAndReturn(connectionUri, args.selectQuery);
-    if (!results || results.rowCount === 0) {
-      backgroundOperation.updateStatus(azdata.TaskStatus.Succeeded, "No data retrieved");
-      vscode.window.showErrorMessage("The query produced no results!");
+    if (!results.columnInfo.some(isScriptedColumn)) {
+      vscode.window.showErrorMessage("The query returned no columns that can be inserted or updated.");
       return;
     }
 
-    const sqlGenerator: SqlGenerator = new SqlGenerator(results, primaryKeyResults, metadata!.schema, metadata!.name);
+    const keyColumns = await resolveKeyColumns(title, results, tableColumns);
+    if (!keyColumns) {
+      return;
+    }
 
-    backgroundOperation.updateStatus(azdata.TaskStatus.InProgress, "Reading data...");
+    const settings = vscode.workspace.getConfiguration("dataScripter");
+
+    const sqlGenerator = new SqlGenerator(results, keyColumns, metadata.schema, metadata.name, {
+      singleLine: settings.get<boolean>("singleLine", false),
+    });
     const sqlScript = sqlGenerator.GenerateMerge();
 
-    var textDocument = await vscode.workspace.openTextDocument({ language: "sql" });
-    var textEditor = await vscode.window.showTextDocument(textDocument, 1, false);
+    const textDocument = await vscode.workspace.openTextDocument({ language: "sql", content: sqlScript });
+    await vscode.window.showTextDocument(textDocument);
 
-    textEditor.edit((editBuilder) => {
-      editBuilder.insert(new vscode.Position(0, 0), sqlScript);
-      backgroundOperation.updateStatus(azdata.TaskStatus.Succeeded);
-    });
+    warnAboutTruncatedValues(results);
   } catch (error) {
-    let message = error instanceof Error ? error.message : "There was an unknown error retrieving data";
-    backgroundOperation.updateStatus(azdata.TaskStatus.Failed, message);
+    const message = error instanceof Error ? error.message : "There was an unknown error retrieving data";
     vscode.window.showErrorMessage(message);
   }
 }
-// this method is called when your extension is deactivated
-export function deactivate() {}
 
-interface GenerateOptions {
-  context: azdata.ObjectExplorerContext;
-  tableName: string;
-  selectQuery: string;
+/** Settings are not held to their schema, so anything other than a list of names is ignored. */
+function getSkipColumns(): string[] {
+  const skipColumns = vscode.workspace.getConfiguration("dataScripter").get<unknown>("skipColumns");
+
+  return Array.isArray(skipColumns) ? skipColumns.filter((name): name is string => typeof name === "string") : [];
+}
+
+/** Runs a query on its own connection behind a progress notification, resolving with undefined when cancelled. */
+function runQuery<T>(
+  node: ITreeNodeInfo,
+  title: string,
+  message: string,
+  run: (connection: SqlConnection) => Promise<T>
+): Thenable<T | undefined> {
+  return vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: title, cancellable: true },
+    (progress, token) => {
+      let connection: SqlConnection | undefined;
+
+      const query = async (): Promise<T | undefined> => {
+        progress.report({ message: "Connecting..." });
+
+        connection = await SqlConnection.open(node);
+
+        try {
+          if (token.isCancellationRequested) {
+            return undefined;
+          }
+
+          progress.report({ message: message });
+
+          return await run(connection);
+        } finally {
+          await connection.close().catch(() => undefined);
+        }
+      };
+
+      // the service does not stop every query it is asked to cancel, so the command stops waiting
+      // and leaves the connection to close once the query has ended
+      return new Promise<T | undefined>((resolve, reject) => {
+        const cancellation = token.onCancellationRequested(() => {
+          resolve(undefined);
+          connection?.cancel().catch(() => undefined);
+        });
+
+        query()
+          .then(resolve, reject)
+          .finally(() => cancellation.dispose());
+      });
+    }
+  );
+}
+
+/** Asks for the columns used to match rows, preselecting the primary key or else the identity column. */
+async function resolveKeyColumns(
+  title: string,
+  results: SimpleExecuteResult,
+  tableColumns: TableColumn[]
+): Promise<string[] | undefined> {
+  const primaryKey = new Set(
+    tableColumns.filter((column) => column.isKey === true).map((column) => column.columnName.toLowerCase())
+  );
+
+  // the query result only flags key columns for some queries, so the primary key of the table is matched by name
+  const isPrimaryKey = (column: IDbColumn) => column.isKey === true || primaryKey.has(column.columnName.toLowerCase());
+
+  const columns = results.columnInfo.filter(isScriptedColumn);
+  const hasPrimaryKey = columns.some(isPrimaryKey);
+
+  const picked = await vscode.window.showQuickPick(
+    columns.map((column) => ({
+      label: column.columnName,
+      picked: hasPrimaryKey ? isPrimaryKey(column) : column.isIdentity === true,
+    })),
+    {
+      canPickMany: true,
+      ignoreFocusOut: true,
+      title: title,
+      placeHolder: "Select the column(s) used to match existing rows",
+    }
+  );
+
+  if (!picked) {
+    return undefined;
+  }
+
+  if (picked.length === 0) {
+    vscode.window.showWarningMessage("No script was generated because no columns were selected to match existing rows.");
+    return undefined;
+  }
+
+  return picked.map((item) => item.label);
+}
+
+/** The mssql extension cuts long values off without saying so, which would script incomplete data. */
+function warnAboutTruncatedValues(results: SimpleExecuteResult): void {
+  const settings = vscode.workspace.getConfiguration("mssql.query");
+
+  const truncated = findTruncatedColumns(results, {
+    maxCharsToStore: settings.get<number>("maxCharsToStore", 65535),
+    maxXmlCharsToStore: settings.get<number>("maxXmlCharsToStore", 2097152),
+  });
+
+  if (truncated.length === 0) {
+    return;
+  }
+
+  vscode.window.showWarningMessage(
+    `Values of ${truncated.map(quoteName).join(", ")} reached the size limit of the SQL Server (mssql) extension ` +
+      "and are probably cut short in the script. Raise the mssql.query.maxCharsToStore setting, " +
+      "or mssql.query.maxXmlCharsToStore for xml, and script the data again."
+  );
 }

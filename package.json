@@ -1,17 +1,16 @@
 {
   "name": "data-scripter",
   "displayName": "Data Scripter",
-  "description": "Generate merge script for data in table",
-  "version": "1.0.0",
+  "description": "Generate a MERGE script for the data in a SQL Server table or view",
+  "version": "2.0.0",
   "publisher": "LoreSoft",
   "repository": {
-    "type": "github",
-    "url": "https://github.com/LoreSoft/DataScripter.git"
+    "type": "git",
+    "url": "https://github.com/loresoft/DataScripter.git"
   },
   "license": "MIT",
   "engines": {
-    "azdata": "*",
-    "vscode": "^1.39.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Other"
@@ -20,11 +19,13 @@
     "Script",
     "Insert",
     "Merge",
-    "SQL"
+    "SQL",
+    "SQL Server",
+    "mssql"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onCommand:data-scripter.generateMergeScript"
+  "extensionDependencies": [
+    "ms-mssql.mssql"
   ],
   "contributes": {
     "commands": [
@@ -33,37 +34,65 @@
         "title": "Script Data as Merge"
       }
     ],
+    "configuration": {
+      "title": "Data Scripter",
+      "properties": {
+        "dataScripter.singleLine": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Script each list of columns on a single line instead of one column per line. This applies to the source columns, the `INSERT` columns and values, and the `UPDATE SET` assignments."
+        },
+        "dataScripter.skipColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "Names of columns to leave out of the default query, such as `Created` or `Updated`. Names are matched without regard to case, in every table and view. Add a column back to the query to script it."
+        }
+      }
+    },
     "menus": {
-      "objectExplorer/item/context": [
+      "commandPalette": [
         {
           "command": "data-scripter.generateMergeScript",
-          "when": "connectionProvider == MSSQL && nodeType == Table || nodeType == View",
-          "group": "NONE"
+          "when": "false"
+        }
+      ],
+      "mssql.sqlScriptsSubmenu": [
+        {
+          "command": "data-scripter.generateMergeScript",
+          "when": "view == objectExplorer && viewItem =~ /\\btype=(Table)\\b/",
+          "group": "1_scripts@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "data-scripter.generateMergeScript",
+          "when": "view == objectExplorer && viewItem =~ /\\btype=(View)\\b/",
+          "group": "3_MSSQL_script@6"
         }
       ]
     }
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "lint": "eslint src --ext ts",
-    "proposedapi": "node installTypings.js",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
     "pretest": "npm run compile && npm run lint",
-    "test": "node ./out/test/runTest.js",
-    "vscode:prepublish": "npm run compile",
-    "watch": "tsc -watch -p ./"
+    "test": "mocha",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {
-    "@types/azdata": "*",
-    "@types/glob": "^7.1.4",
-    "@types/mocha": "^9.0.0",
-    "@types/node": "^13.11.0",
-    "@types/vscode": "^1.39.0",
-    "@typescript-eslint/eslint-plugin": "^2.30.0",
-    "@typescript-eslint/parser": "^2.30.0",
-    "azdata-test": "^1.x",
-    "eslint": "^6.8.0",
-    "glob": "^7.1.7",
-    "mocha": "^9.1.0",
-    "typescript": "^4.3.5"
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "~1.105.0",
+    "@vscode/vsce": "^4.1.1",
+    "eslint": "^10.15.0",
+    "mocha": "^12.0.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0"
   }
 }

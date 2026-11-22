@@ -1,6 +1,5 @@
 out
 node_modules
-.ads-test/
 *.vsix
 
 ## Ignore Visual Studio temporary files, build results, and

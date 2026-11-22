@@ -1,8 +1,8 @@
 name: Build Extension
 
 env:
-  BUILD_VERSION: "1.0.${{github.run_number}}"
-  BUILD_INFORMATION: "1.0.${{github.run_number}}+Branch.${{github.ref_name}}.Sha.${{github.sha}}"
+  BUILD_VERSION: "2.0.${{github.run_number}}"
+  BUILD_INFORMATION: "2.0.${{github.run_number}}+Branch.${{github.ref_name}}.Sha.${{github.sha}}"
 
 on:
   push:
@@ -21,14 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          always-auth: true
-          node-version: 18
-          registry-url: "https://npm.pkg.github.com"
+          node-version: 22
+          cache: npm
 
       - name: Configure
         run: |
@@ -36,19 +35,20 @@ jobs:
           git config --local user.name "github-actions[bot]"
 
       - name: Install Packages
-        run: |
-          npm install -g @vscode/vsce
-          npm install
+        run: npm ci
+
+      - name: Test
+        run: npm test
 
       - name: Version Package
         run: npm version "${{env.BUILD_VERSION}}"
 
       - name: Create Package
-        run: vsce package
+        run: npm run package
 
       - name: Upload Package
         if: success() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Package
           path: data-scripter-*.vsix
@@ -58,4 +58,3 @@ jobs:
         run: 'gh release create "${{env.BUILD_VERSION}}" data-scripter-*.vsix --title "v${{env.BUILD_VERSION}}"'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
