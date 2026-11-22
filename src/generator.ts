@@ -110,7 +110,7 @@ export class SqlGenerator {
     const hasIdentity = this.hasIdentityColumn();
     const table = `${quoteName(this._schemaName)}.${quoteName(this._tableName)}`;
 
-    scripted.push(`/* Table ${this._schemaName}.${this._tableName} data */`);
+    scripted.push(`/* Table ${this._schemaName}.${this._tableName} Data */`);
     scripted.push(``);
 
     if (hasIdentity) {
@@ -142,7 +142,7 @@ export class SqlGenerator {
     this.writeColumnNames(scripted, 8, "s", isInsertable, this._singleLine);
     scripted.push(`    )`);
     this.writeUpdate(scripted, 8, this._singleLine);
-    scripted.push(`OUTPUT $action as [Action];`);
+    scripted.push(`OUTPUT $action AS [Action];`);
 
     if (hasIdentity) {
       scripted.push(``);
