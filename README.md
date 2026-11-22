@@ -4,6 +4,19 @@ Visual Studio Code extension that generates a `MERGE` script for the data in a S
 
 ![Script Data as Merge in the SQL Server Object Explorer](https://raw.githubusercontent.com/loresoft/DataScripter/main/design/Screenshot-Script-Data-Merge.png)
 
+## Features
+
+- **Scripts from the Object Explorer**: right-click a table or view to script its data as a single `MERGE` statement.
+- **Repeatable scripts**: the `MERGE` inserts the rows that are missing and updates the rows that exist, so it can be run again and again, and reports the action taken for every row.
+- **All or part of the data**: edit the query before it runs to filter the rows or change the columns that are scripted.
+- **Choice of matching columns**: select the columns used to match existing rows, with the primary key or the identity column selected by default.
+- **Identity and read-only columns**: identity values are kept with `SET IDENTITY_INSERT`, and computed, `rowversion` and generated always columns are left out.
+- **Skipped columns**: leave columns such as `Created` or `Updated` out of the default query with the `dataScripter.skipColumns` setting.
+- **Values by data type**: text, dates, numbers and binary values are scripted to insert the same value under every language and regional setting.
+- **One row per line**: line breaks and tabs in a value are scripted as character codes, which keeps the script easy to read and compare.
+- **Compact layout**: script each list of columns on a single line with the `dataScripter.singleLine` setting.
+- **Warning for cut-off values**: warns when a long value reached the size limit of the SQL Server (mssql) extension.
+
 ## Requirements
 
 - Visual Studio Code 1.105 or later
@@ -24,12 +37,65 @@ The SQL Server (mssql) extension only keeps the first 65,535 characters or bytes
 
 The first time the command runs, Visual Studio Code asks you to allow Data Scripter to use your SQL Server connections. Access can be revoked at any time from the Accounts menu.
 
+## Sample Output
+
+```sql
+/* Table dbo.Priority Data */
+
+MERGE INTO [dbo].[Priority] AS t
+USING
+(
+    VALUES
+    (1, N'High', N'High Priority', 1, 1),
+    (2, N'Normal', N'Normal Priority', 2, 1),
+    (3, N'Low', N'Low Priority', 3, 1)
+)
+AS s
+(
+    [Id],
+    [Name],
+    [Description],
+    [DisplayOrder],
+    [IsActive]
+)
+ON
+(
+    t.[Id] = s.[Id]
+)
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT
+    (
+        [Id],
+        [Name],
+        [Description],
+        [DisplayOrder],
+        [IsActive]
+    )
+    VALUES
+    (
+        s.[Id],
+        s.[Name],
+        s.[Description],
+        s.[DisplayOrder],
+        s.[IsActive]
+    )
+WHEN MATCHED THEN
+    UPDATE SET
+        t.[Name] = s.[Name],
+        t.[Description] = s.[Description],
+        t.[DisplayOrder] = s.[DisplayOrder],
+        t.[IsActive] = s.[IsActive]
+OUTPUT $action AS [Action];
+```
+
 ## Settings
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `dataScripter.singleLine` | `false` | Script each list of columns on a single line instead of one column per line. This applies to the source columns, the `INSERT` columns and values, and the `UPDATE SET` assignments. |
-| `dataScripter.skipColumns` | `[]` | Names of columns to leave out of the default query, such as `Created` or `Updated`. Names are matched without regard to case, in every table and view. |
+![Data Scripter settings in the Settings editor](https://raw.githubusercontent.com/loresoft/DataScripter/main/design/Screenshot-Data-Scripter-Settings.png)
+
+| Setting                    | Default | Description                                                                                                                                                                         |
+| -------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dataScripter.singleLine`  | `false` | Script each list of columns on a single line instead of one column per line. This applies to the source columns, the `INSERT` columns and values, and the `UPDATE SET` assignments. |
+| `dataScripter.skipColumns` | `[]`    | Names of columns to leave out of the default query, such as `Created` or `Updated`. Names are matched without regard to case, in every table and view.                              |
 
 Skipped columns are only left out of the default query. Add a column back to the query to script it.
 
