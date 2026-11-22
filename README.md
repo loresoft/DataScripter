@@ -40,7 +40,9 @@ Skipped columns are only left out of the default query. Add a column back to the
 
 ## Installation
 
-The current release is available to [download](https://github.com/loresoft/DataScripter/releases) as a .vsix file and can be installed by opening the Extensions view, selecting the **...** menu, and selecting *Install from VSIX...*
+Install [Data Scripter](https://marketplace.visualstudio.com/items?itemName=loresoft.data-scripter) from the Visual Studio Marketplace, or search for **Data Scripter** in the Extensions view.
+
+The current release is also available to [download](https://github.com/loresoft/DataScripter/releases) as a .vsix file and can be installed by opening the Extensions view, selecting the **...** menu, and selecting *Install from VSIX...*
 
 ## Building
 

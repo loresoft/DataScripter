@@ -3,14 +3,25 @@
   "displayName": "Data Scripter",
   "description": "Generate a MERGE script for the data in a SQL Server table or view",
   "version": "2.0.0",
-  "publisher": "LoreSoft",
+  "publisher": "loresoft",
+  "icon": "logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/loresoft/DataScripter.git"
   },
   "license": "MIT",
+  "homepage": "https://github.com/loresoft/DataScripter#readme",
+  "bugs": {
+    "url": "https://github.com/loresoft/DataScripter/issues"
+  },
   "engines": {
     "vscode": "^1.105.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
   },
   "categories": [
     "Other"
