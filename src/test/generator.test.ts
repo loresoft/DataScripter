@@ -34,7 +34,7 @@ suite("SqlGenerator", () => {
     assert.ok(script.includes("MERGE INTO [dbo].[OrderLine] AS t"));
     assert.ok(script.includes("    (1, 1, 5),\n    (1, 2, 7)"));
     assert.ok(script.includes("    t.[OrderId] = s.[OrderId] AND t.[LineNumber] = s.[LineNumber]"));
-    assert.ok(script.includes("    UPDATE SET\n        t.[Quantity] = s.[Quantity]\nOUTPUT $action as [Action];"));
+    assert.ok(script.includes("    UPDATE SET\n        t.[Quantity] = s.[Quantity]\nOUTPUT $action AS [Action];"));
     assert.ok(!script.includes("IDENTITY_INSERT"));
   });
 
@@ -251,7 +251,7 @@ suite("SqlGenerator", () => {
 
     const script = new SqlGenerator(results, ["UserId", "RoleId"], "dbo", "UserRole").GenerateMerge();
 
-    assert.ok(script.includes("        s.[RoleId]\n    )\nOUTPUT $action as [Action];"));
+    assert.ok(script.includes("        s.[RoleId]\n    )\nOUTPUT $action AS [Action];"));
     assert.ok(!script.includes("WHEN MATCHED"));
   });
 

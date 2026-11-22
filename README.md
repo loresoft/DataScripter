@@ -2,6 +2,8 @@
 
 Visual Studio Code extension that generates a `MERGE` script for the data in a SQL Server table or view. It adds a **Script Data as Merge** command to the Object Explorer of the [SQL Server (mssql)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) extension.
 
+![Script Data as Merge in the SQL Server Object Explorer](https://raw.githubusercontent.com/loresoft/DataScripter/main/design/Screenshot-Script-Data-Merge.png)
+
 ## Requirements
 
 - Visual Studio Code 1.105 or later
